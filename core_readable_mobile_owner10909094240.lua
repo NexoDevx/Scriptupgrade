@@ -28234,6 +28234,7 @@ do
     local robotPilotGui       = nil
     local robotHudFrame       = nil
     local robotHudStatus      = nil
+    -- Legacy touch-arrow state kept only for backward compatibility with older HUD cleanup calls.
     local robotUIForward      = false
     local robotUIBackward     = false
     local robotUILeft         = false
@@ -28684,19 +28685,8 @@ do
             return b
         end
 
-        -- D-pad: large touch targets so the mobile joystick is not required.
-        makeHold("Forward", "▲", UDim2.new(0, 106, 0, 70), UDim2.new(0, 88, 0, 42),
-            function() robotUIForward = true end,
-            function() robotUIForward = false end)
-        makeHold("Left", "◀", UDim2.new(0, 10, 0, 116), UDim2.new(0, 88, 0, 42),
-            function() robotUILeft = true end,
-            function() robotUILeft = false end)
-        makeHold("Back", "▼", UDim2.new(0, 106, 0, 116), UDim2.new(0, 88, 0, 42),
-            function() robotUIBackward = true end,
-            function() robotUIBackward = false end)
-        makeHold("Right", "▶", UDim2.new(0, 202, 0, 116), UDim2.new(0, 88, 0, 42),
-            function() robotUIRight = true end,
-            function() robotUIRight = false end)
+        -- Movement intentionally uses Roblox's own humanoid joystick/MoveDirection,
+        -- matching the original Leviathan control model. No replacement D-pad is added.
 
         makeAction("Wake", "WAKE UP", UDim2.new(0, 10, 0, 168), function()
             if not robotActive then return end
@@ -28825,19 +28815,12 @@ do
                 setupRobotPilotHUD()
                 local moveDir = Vector3.new(0, 0, 0)
                 local turnSpeed = 2.4
-                if uis:IsKeyDown(Enum.KeyCode.A) or robotUILeft then
-                    robotAngle = robotAngle - turnSpeed * dt
-                end
-                if uis:IsKeyDown(Enum.KeyCode.D) or robotUIRight then
-                    robotAngle = robotAngle + turnSpeed * dt
-                end
-
-                local fwd = Vector3.new(math.sin(robotAngle), 0, math.cos(robotAngle))
-                if uis:IsKeyDown(Enum.KeyCode.W) or robotUIForward then
-                    moveDir = moveDir + fwd
-                end
-                if uis:IsKeyDown(Enum.KeyCode.S) or robotUIBackward then
-                    moveDir = moveDir - fwd * 0.5
+                if myHum and myHum.MoveDirection.Magnitude > 0.05 then
+                    local md = myHum.MoveDirection
+                    local targetAngle = math.atan2(md.X, md.Z)
+                    local diffAngle = (targetAngle - robotAngle + math.pi) % (2 * math.pi) - math.pi
+                    robotAngle = robotAngle + math.clamp(diffAngle, -turnSpeed * 1.5, turnSpeed * 1.5) * dt
+                    moveDir = Vector3.new(math.sin(robotAngle), 0, math.cos(robotAngle))
                 end
 
                 if moveDir.Magnitude > 0 then
@@ -29791,33 +29774,25 @@ do
             return btn
         end
 
-        -- Touch D-pad
-        makeHold("Forward", "▲", UDim2.new(0, 104, 0, 68), UDim2.new(0, 92, 0, 42),
-            function() isUIForward = true end, function() isUIForward = false end)
-        makeHold("Left", "◀", UDim2.new(0, 4, 0, 114), UDim2.new(0, 92, 0, 42),
-            function() isUILeft = true end, function() isUILeft = false end)
-        makeHold("Back", "▼", UDim2.new(0, 104, 0, 114), UDim2.new(0, 92, 0, 42),
-            function() isUIBackward = true end, function() isUIBackward = false end)
-        makeHold("Right", "▶", UDim2.new(0, 204, 0, 114), UDim2.new(0, 92, 0, 42),
-            function() isUIRight = true end, function() isUIRight = false end)
-
-        makeHold("Up", "▲ UP", UDim2.new(0, 4, 0, 162), UDim2.new(0, 92, 0, 34),
+        -- Movement uses Roblox's native joystick through Humanoid.MoveDirection,
+        -- matching the original Leviathan behavior. Vertical flight controls stay explicit.
+        makeHold("Up", "▲ UP", UDim2.new(0, 4, 0, 108), UDim2.new(0, 92, 0, 34),
             function() isUIUp = true end, function() isUIUp = false end)
-        makeHold("Down", "▼ DOWN", UDim2.new(0, 104, 0, 162), UDim2.new(0, 92, 0, 34),
+        makeHold("Down", "▼ DOWN", UDim2.new(0, 104, 0, 108), UDim2.new(0, 92, 0, 34),
             function() isUIDown = true end, function() isUIDown = false end)
-        makeHold("Sprint", "SPRINT", UDim2.new(0, 204, 0, 162), UDim2.new(0, 92, 0, 34),
+        makeHold("Sprint", "SPRINT", UDim2.new(0, 204, 0, 108), UDim2.new(0, 92, 0, 34),
             function() isUIBoost = true end, function() isUIBoost = false end)
 
-        makeAction("TakeOff", "TAKE OFF", UDim2.new(0, 4, 0, 204), UDim2.new(0, 92, 0, 34), function()
+        makeAction("TakeOff", "TAKE OFF", UDim2.new(0, 4, 0, 150), UDim2.new(0, 92, 0, 34), function()
             if unicornActive then unicornForceTakeoff = true end
         end, true)
-        makeAction("Recall", "RECALL", UDim2.new(0, 104, 0, 204), UDim2.new(0, 92, 0, 34), function()
+        makeAction("Recall", "RECALL", UDim2.new(0, 104, 0, 150), UDim2.new(0, 92, 0, 34), function()
             if unicornActive then
                 unicornForceReturn = true
                 uNotif("The unicorn heard your call and is returning to base!", 3)
             end
         end)
-        makeAction("Dismount", "EXIT", UDim2.new(0, 204, 0, 204), UDim2.new(0, 92, 0, 34), function()
+        makeAction("Dismount", "EXIT", UDim2.new(0, 204, 0, 150), UDim2.new(0, 92, 0, 34), function()
             removeUnicornGUI()
             local h = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
             if h then h.Sit = false end
@@ -29825,9 +29800,9 @@ do
 
         local help = Instance.new("TextLabel")
         help.Size = UDim2.new(1, -12, 0, 62)
-        help.Position = UDim2.new(0, 6, 0, 247)
+        help.Position = UDim2.new(0, 6, 0, 192)
         help.BackgroundTransparency = 1
-        help.Text = "Touch the arrows to move. Hold UP/DOWN to fly.\nSPRINT is held while pressed. Take Off/Recall are one-tap actions."
+        help.Text = "Use the Roblox joystick to move. Hold UP/DOWN to fly.\nSPRINT is held while pressed. Take Off/Recall are one-tap actions."
         help.TextColor3 = Color3.fromRGB(205, 195, 215)
         help.Font = Enum.Font.GothamMedium
         help.TextSize = 9
@@ -29977,11 +29952,7 @@ do
             elseif rideState == "manual_ground" then
                 useFolded = false
                 
-                local moveDir = Vector3.new(0,0,0)
-                if uis:IsKeyDown(Enum.KeyCode.W) or isUIForward then moveDir = moveDir + Vector3.new(0,0,-1) end
-                if uis:IsKeyDown(Enum.KeyCode.S) or isUIBackward then moveDir = moveDir + Vector3.new(0,0,1) end
-                if uis:IsKeyDown(Enum.KeyCode.A) or isUILeft then moveDir = moveDir + Vector3.new(-1,0,0) end
-                if uis:IsKeyDown(Enum.KeyCode.D) or isUIRight then moveDir = moveDir + Vector3.new(1,0,0) end
+                local moveDir = (lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") and lp.Character:FindFirstChildOfClass("Humanoid").MoveDirection) or Vector3.new(0,0,0)
                 
                 local isRunning = uis:IsKeyDown(Enum.KeyCode.LeftShift) or isUIBoost
                 local targetSpeed = 0
@@ -29989,11 +29960,8 @@ do
                 if moveDir.Magnitude > 0.1 then
                     targetSpeed = isRunning and 140 or 50
                     
-                    local cam = ws.CurrentCamera
-                    local camLook = cam.CFrame.LookVector
-                    local camYaw = (math.atan2 or math.atan)(-camLook.X, -camLook.Z)
-                    local localYaw = (math.atan2 or math.atan)(-moveDir.X, -moveDir.Z)
-                    local targetYaw = camYaw + localYaw
+                    -- MoveDirection is already camera-relative in Roblox, so use its world direction directly.
+                    local targetYaw = (math.atan2 or math.atan)(-moveDir.X, -moveDir.Z)
                     
                     local angleDiff = targetYaw - currentYaw
                     while angleDiff >  math.pi do angleDiff = angleDiff - 2*math.pi end
@@ -30071,22 +30039,15 @@ do
             elseif rideState == "manual_flight" then
                 flightTime = flightTime + dt
                 
-                local moveDir = Vector3.new(0,0,0)
-                if uis:IsKeyDown(Enum.KeyCode.W) or isUIForward then moveDir = moveDir + Vector3.new(0,0,-1) end
-                if uis:IsKeyDown(Enum.KeyCode.S) or isUIBackward then moveDir = moveDir + Vector3.new(0,0,1) end
-                if uis:IsKeyDown(Enum.KeyCode.A) or isUILeft then moveDir = moveDir + Vector3.new(-1,0,0) end
-                if uis:IsKeyDown(Enum.KeyCode.D) or isUIRight then moveDir = moveDir + Vector3.new(1,0,0) end
+                local moveDir = (lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") and lp.Character:FindFirstChildOfClass("Humanoid").MoveDirection) or Vector3.new(0,0,0)
                 
                 local isRunning = uis:IsKeyDown(Enum.KeyCode.LeftShift) or isUIBoost
                 local targetSpeed = isRunning and 300 or 120
                 
                 local bankTarget = 0
                 if moveDir.Magnitude > 0.1 then
-                    local cam = ws.CurrentCamera
-                    local camLook = cam.CFrame.LookVector
-                    local camYaw = (math.atan2 or math.atan)(-camLook.X, -camLook.Z)
-                    local localYaw = (math.atan2 or math.atan)(-moveDir.X, -moveDir.Z)
-                    local targetYaw = camYaw + localYaw
+                    -- MoveDirection is already camera-relative in Roblox, so use its world direction directly.
+                    local targetYaw = (math.atan2 or math.atan)(-moveDir.X, -moveDir.Z)
                     
                     local angleDiff = targetYaw - currentYaw
                     while angleDiff >  math.pi do angleDiff = angleDiff - 2*math.pi end
@@ -30195,11 +30156,8 @@ do
                 end
                 
                 
-                if isDriverSitting() and (
-                    uis:IsKeyDown(Enum.KeyCode.W) or uis:IsKeyDown(Enum.KeyCode.A) or
-                    uis:IsKeyDown(Enum.KeyCode.S) or uis:IsKeyDown(Enum.KeyCode.D) or
-                    isUIForward or isUIBackward or isUILeft or isUIRight
-                ) then
+                local autoPilotHum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+                if isDriverSitting() and autoPilotHum and autoPilotHum.MoveDirection.Magnitude > 0.05 then
                     setupUnicornGUI()
                     rideState = "manual_flight"
                     local _, yaw, _ = unicornCF:ToEulerAnglesYXZ()
@@ -33562,11 +33520,8 @@ do
             end
         end
 
-        makeBtn("Forward", "▲", 72, 30, 58, 34, nil, function() spiderUIForward = true end, function() spiderUIForward = false end)
-        makeBtn("Left", "◀", 10, 68, 58, 34, nil, function() spiderUILeft = true end, function() spiderUILeft = false end)
-        makeBtn("Backward", "▼", 72, 68, 58, 34, nil, function() spiderUIBackward = true end, function() spiderUIBackward = false end)
-        makeBtn("Right", "▶", 134, 68, 58, 34, nil, function() spiderUIRight = true end, function() spiderUIRight = false end)
-        makeBtn("Sprint", "SPRINT", 204, 30, 76, 34, nil, function() spiderUIBoost = true end, function() spiderUIBoost = false end)
+        -- Steering uses Roblox's native joystick through Humanoid.MoveDirection, like Leviathan.
+        makeBtn("Sprint", "SPRINT", 72, 30, 76, 34, nil, function() spiderUIBoost = true end, function() spiderUIBoost = false end)
         makeBtn("Mount", "MOUNT", 286, 30, 76, 34, function()
             if not spiderActive then return end
             local char = lp.Character
@@ -33610,9 +33565,9 @@ do
 
         local hint = Instance.new("TextLabel")
         hint.Size = UDim2.new(1, -204, 0, 24)
-        hint.Position = UDim2.new(0, 204, 0, 70)
+        hint.Position = UDim2.new(0, 160, 0, 70)
         hint.BackgroundTransparency = 1
-        hint.Text = "Touch-hold direction • use Roblox joystick too • SPRINT hold"
+        hint.Text = "Use the Roblox joystick • SPRINT hold"
         hint.TextColor3 = Color3.fromRGB(185, 185, 195)
         hint.Font = Enum.Font.Gotham
         hint.TextSize = 9
@@ -33727,23 +33682,16 @@ do
                     spiderAngle = math.atan2(faceTarget.X, faceTarget.Z)
                 end
             elseif isDriver and spiderStance == "Ride (WASD Steering)" then
-                local moveDir = 0
-                if uis:IsKeyDown(Enum.KeyCode.W) or spiderUIForward then moveDir = moveDir + 1 end
-                if uis:IsKeyDown(Enum.KeyCode.S) or spiderUIBackward then moveDir = moveDir - 1 end
-
-                
-                if uis:IsKeyDown(Enum.KeyCode.A) or spiderUILeft then
-                    spiderAngle = spiderAngle - (dt * 3.4)
-                end
-                if uis:IsKeyDown(Enum.KeyCode.D) or spiderUIRight then
-                    spiderAngle = spiderAngle + (dt * 3.4)
-                end
-
-                if math.abs(moveDir) > 0.1 then
+                local myChar = lp.Character
+                local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                local md = myHum and myHum.MoveDirection or Vector3.new(0, 0, 0)
+                if md.Magnitude > 0.05 then
                     spiderState = "walk"
+                    local targetAngle = math.atan2(md.X, md.Z)
+                    local diffAngle = (targetAngle - spiderAngle + math.pi) % (2 * math.pi) - math.pi
+                    spiderAngle = spiderAngle + math.clamp(diffAngle, -5.1, 5.1) * dt
                     local forwardVec = Vector3.new(math.sin(spiderAngle), 0, math.cos(spiderAngle))
-                    local stepVec = forwardVec * (moveDir * currentSpd * dt)
-
+                    local stepVec = forwardVec * (currentSpd * dt)
                     local newPos, _ = _0xH_408(spiderAnchor, stepVec, rayParams)
                     spiderAnchor = newPos
                 else
@@ -35966,13 +35914,10 @@ do
             end
         end
 
-        makeBtn("Forward", "▲", 68, 30, 56, 34, nil, function() scorpionUIForward = true end, function() scorpionUIForward = false end)
-        makeBtn("Left", "◀", 8, 68, 56, 34, nil, function() scorpionUILeft = true end, function() scorpionUILeft = false end)
-        makeBtn("Backward", "▼", 68, 68, 56, 34, nil, function() scorpionUIBackward = true end, function() scorpionUIBackward = false end)
-        makeBtn("Right", "▶", 128, 68, 56, 34, nil, function() scorpionUIRight = true end, function() scorpionUIRight = false end)
-        makeBtn("Sprint", "SPRINT", 196, 30, 76, 34, nil, function() scorpionUIBoost = true end, function() scorpionUIBoost = false end)
-        makeBtn("Stinger", "STINGER", 278, 30, 78, 34, function() triggerStingerStrike() end)
-        makeBtn("Mount", "MOUNT", 362, 30, 70, 34, function()
+        -- Steering uses Roblox's native joystick through Humanoid.MoveDirection, like Leviathan.
+        makeBtn("Sprint", "SPRINT", 68, 30, 76, 34, nil, function() scorpionUIBoost = true end, function() scorpionUIBoost = false end)
+        makeBtn("Stinger", "STINGER", 150, 30, 78, 34, function() triggerStingerStrike() end)
+        makeBtn("Mount", "MOUNT", 234, 30, 70, 34, function()
             if not scorpionActive then return end
             local char = lp.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -35988,17 +35933,17 @@ do
                 end)
             end
         end)
-        makeBtn("Exit", "EXIT", 438, 30, 70, 34, function()
+        makeBtn("Exit", "EXIT", 310, 30, 70, 34, function()
             local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
             if hum then hum.Sit = false end
             removeScorpionPilotHUD()
         end)
 
         local hint = Instance.new("TextLabel")
-        hint.Size = UDim2.new(1, -196, 0, 24)
-        hint.Position = UDim2.new(0, 196, 0, 70)
+        hint.Size = UDim2.new(1, -156, 0, 24)
+        hint.Position = UDim2.new(0, 156, 0, 70)
         hint.BackgroundTransparency = 1
-        hint.Text = "Touch-hold steer • ZQSD/WASD still works • Space/F = stinger"
+        hint.Text = "Use the Roblox joystick • Space/F = stinger"
         hint.TextColor3 = Color3.fromRGB(190, 180, 170)
         hint.Font = Enum.Font.Gotham
         hint.TextSize = 9
@@ -36163,24 +36108,15 @@ do
 
             if isRiding then
                 if scorpionPilotFrame then scorpionPilotFrame.Visible = true end
-                local isFwd = uis:IsKeyDown(Enum.KeyCode.Z) or uis:IsKeyDown(Enum.KeyCode.W) or uis:IsKeyDown(Enum.KeyCode.Up) or scorpionUIForward
-                local isBwd = uis:IsKeyDown(Enum.KeyCode.S) or uis:IsKeyDown(Enum.KeyCode.Down) or scorpionUIBackward
-                local isLeft = uis:IsKeyDown(Enum.KeyCode.Q) or uis:IsKeyDown(Enum.KeyCode.A) or uis:IsKeyDown(Enum.KeyCode.Left) or scorpionUILeft
-                local isRight = uis:IsKeyDown(Enum.KeyCode.D) or uis:IsKeyDown(Enum.KeyCode.Right) or scorpionUIRight
+                local md = myHum and myHum.MoveDirection or Vector3.new(0, 0, 0)
                 _0xH_433 = uis:IsKeyDown(Enum.KeyCode.LeftShift) or uis:IsKeyDown(Enum.KeyCode.RightShift) or scorpionUIBoost
 
-                if isLeft then
-                    scorpionYaw = scorpionYaw + 2.8 * dt
-                end
-                if isRight then
-                    scorpionYaw = scorpionYaw - 2.8 * dt
-                end
-
                 local targetSpeed = 0
-                if isFwd then
+                if md.Magnitude > 0.05 then
+                    local targetAngle = math.atan2(-md.X, -md.Z)
+                    local diffAngle = (targetAngle - scorpionYaw + math.pi) % (2 * math.pi) - math.pi
+                    scorpionYaw = scorpionYaw + math.clamp(diffAngle, -4.2, 4.2) * dt
                     targetSpeed = _0xH_433 and 32 or 16
-                elseif isBwd then
-                    targetSpeed = -(_0xH_433 and 18 or 10)
                 end
 
                 moveSpeed = moveSpeed + (targetSpeed - moveSpeed) * math.clamp(dt * 9, 0, 1)
